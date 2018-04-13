@@ -120,30 +120,6 @@
           :readme (-some-> (gethash "readme" object) (decode-coding-string 'utf-8 t)))
     ))
 
-(defun package-json nil
-  (let* ((current-buffer (current-buffer))
-         (deps (package-json--get-deps "dependencies"))
-         (devdeps (package-json--get-deps "devDependencies"))
-         (all (-concat deps devdeps)))
-    (package-json--reset-ov all)
-    (redisplay)
-    (dolist (pkg all)
-      (package-json--update-ov pkg nil t)
-      (redisplay)
-      (-when-let* ((buffer (url-retrieve-synchronously (concat "https://registry.npmjs.org/" (plist-get pkg :pkg))
-                                                       t)))
-        (with-current-buffer buffer
-          (goto-char (1+ url-http-end-of-headers))
-          (let* ((obj (json-parse-buffer))
-                 (data (package-json--make-data obj (plist-get pkg :version))))
-            (plist-put pkg :data data)
-            (with-current-buffer current-buffer
-              (package-json--update-ov pkg data))
-            (redisplay)
-            (kill-buffer)))))
-    (setq package-json--deps all)
-    nil))
-
 ;; (defun package-json nil
 ;;   (let* ((current-buffer (current-buffer))
 ;;          (deps (package-json--get-deps "dependencies"))
@@ -152,27 +128,65 @@
 ;;     (package-json--reset-ov all)
 ;;     (redisplay)
 ;;     (dolist (pkg all)
-;;       ;; (package-json--update-ov pkg nil t)
-;;       ;; (redisplay)
-;;       ;; (message "START %s" pkg)
-;;       (url-retrieve (concat "https://registry.npmjs.org/" (plist-get pkg :pkg))
-;;                     (lambda (&rest _)
-;;                       (goto-char (1+ url-http-end-of-headers))
-;;                       ;; (let* ((obj (json-read))
-;;                       (let* ((obj (json-parse-buffer))
-;;                              (data (list :name (gethash "name" obj)
-;;                                          :tags (gethash "dist-tags" obj)
-;;                                          :description (gethash "description" obj)
-;;                                          :homepage (gethash "homepage" obj)
-;;                                          :readme (gethash "readme" obj))))
-;;                         (plist-put pkg :data data)
-;;                         (with-current-buffer current-buffer
-;;                           (package-json--update-ov pkg data))
-;;                         (redisplay)
-;;                         (kill-buffer)))
-;;                     nil t))
+;;       (package-json--update-ov pkg nil t)
+;;       (redisplay)
+;;       (-when-let* ((buffer (url-retrieve-synchronously (concat "https://registry.npmjs.org/" (plist-get pkg :pkg))
+;;                                                        t)))
+;;         (with-current-buffer buffer
+;;           (goto-char (1+ url-http-end-of-headers))
+;;           (let* ((obj (json-parse-buffer))
+;;                  (data (package-json--make-data obj (plist-get pkg :version))))
+;;             (plist-put pkg :data data)
+;;             (with-current-buffer current-buffer
+;;               (package-json--update-ov pkg data))
+;;             (redisplay)
+;;             (kill-buffer)))))
 ;;     (setq package-json--deps all)
 ;;     nil))
+
+(defun package-json nil
+  (let* ((current-buffer (current-buffer))
+         (deps (package-json--get-deps "dependencies"))
+         (devdeps (package-json--get-deps "devDependencies"))
+         (all (-concat deps devdeps)))
+    (package-json--reset-ov all)
+    (redisplay)
+    (dolist (pkg all)
+      ;; (package-json--update-ov pkg nil t)
+      ;; (redisplay)
+      ;; (message "START %s" pkg)
+      (url-retrieve (concat "https://registry.npmjs.org/" (plist-get pkg :pkg))
+                    (lambda (&rest _)
+                      (goto-char (1+ url-http-end-of-headers))
+                      ;; (let* ((obj (json-read))
+                      (let* ((obj (json-parse-buffer))
+                             (data (list :name (gethash "name" obj)
+                                         :tags (gethash "dist-tags" obj)
+                                         :description (gethash "description" obj)
+                                         :homepage (gethash "homepage" obj)
+                                         :readme (gethash "readme" obj))))
+                        (plist-put pkg :data data)
+                        (with-current-buffer current-buffer
+                          (package-json--update-ov pkg data))
+                        (redisplay)
+                        (kill-buffer)))
+                    nil t))
+    (setq package-json--deps all)
+    nil))
+
+(defun package-json--update nil
+  (let* ((current-buffer (current-buffer))
+         (deps (package-json--get-deps "dependencies"))
+         (devdeps (package-json--get-deps "devDependencies"))
+         (all (-concat deps devdeps))
+         new-list)
+    (dolist (pkg all)
+      (let ((new pkg))
+        (-some--> (--first (equal (plist-get it :pkg) (plist-get pkg :pkg)) package-json--deps)
+                  (plist-put new :data (plist-get it :data)))
+        (push new new-list)))
+    (setq package-json--deps new-list)
+    nil))
 
 ;; (defun package-json-thread nil
 ;;   (make-thread 'package-json "OTHER THREAD"))
@@ -306,5 +320,23 @@
     (set-frame-size frame width height t)
     (set-frame-position frame (- (frame-pixel-width) width 20 (* (frame-char-width) 2)) 10)))
 
-(provide 'package-json)
+(defun package-json--after-changes (_start _end _len)
+  (package-json--update))
+
+(define-minor-mode package-json-mode
+  "Minor mode for package-json."
+  :init-value nil
+  :group package-json
+  (cond
+   (package-json-mode
+    (add-hook 'post-command-hook 'package-json--post-command nil t)
+    (add-hook 'after-change-functions 'package-json--after-changes nil t)
+    (package-json)
+    )
+   (t
+    (remove-hook 'post-command-hook 'package-json--post-command t)
+    (remove-hook 'after-change-functions 'package-json--after-changes t)
+    (remove-overlays nil nil 'package-json t))))
+
+  (provide 'package-json)
 ;;; package-json.el ends here
