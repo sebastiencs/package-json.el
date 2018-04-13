@@ -38,6 +38,7 @@
 (require 'json)
 (require 'dash)
 (require 'subr-x)
+(require 'markdown-mode)
 
 (defvar-local package-json--deps nil)
 
@@ -175,6 +176,37 @@
 ;; (defun package-json-thread nil
 ;;   (make-thread 'package-json "OTHER THREAD"))
 
+(defmacro package-json--get (variable)
+  (let ((var (intern (format "package-json-%s" variable))))
+    `(frame-local-get ',var (frame-parent))))
+
+(defmacro package-json--set (variable value)
+  (let ((var (intern (format "package-json-%s" variable))))
+    `(frame-local-set ',var ,value (frame-parent))))
+
+(defun package-json-open-readme-at-point nil
+  "Open the readme of the package on the current line."
+  (interactive)
+  (-when-let* ((line (line-number-at-pos))
+               (pkg (--first (equal (plist-get it :line) line) package-json--deps))
+               (name (plist-get pkg :pkg))
+               (data (plist-get pkg :data)))
+    (-> (with-current-buffer (get-buffer-create (concat "*README-" name "*"))
+          (setq buffer-read-only nil)
+          (erase-buffer)
+          (insert (plist-get data :readme))
+          (markdown-view-mode)
+          (goto-char 1)
+          (setq-local markdown-fontify-code-blocks-natively t)
+          (setq-local markdown-hide-markup-in-view-modes t)
+          (setq-local markdown-hide-markup t)
+          (setq-local markdown-hide-urls t)
+          (local-set-key (kbd "q") #'(lambda nil (interactive) (quit-restore-window nil 'kill)))
+          (current-buffer))
+        (pop-to-buffer))
+    (-some-> (package-json--get frame)
+             (make-frame-invisible))))
+
 (defvar package-json-frame-parameters
   '((left . -1)
     (no-accept-focus . t)
@@ -199,14 +231,6 @@
     (drag-internal-border . t)
     (no-special-glyphs . t))
   "Frame parameters used to create the frame.")
-
-(defmacro package-json--get (variable)
-  (let ((var (intern (format "package-json-%s" variable))))
-    `(frame-local-get ',var (frame-parent))))
-
-(defmacro package-json--set (variable value)
-  (let ((var (intern (format "package-json-%s" variable))))
-    `(frame-local-set ',var ,value (frame-parent))))
 
 (defface package-json-url
   '((t :inherit link))
