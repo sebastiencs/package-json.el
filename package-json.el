@@ -144,6 +144,20 @@
 ;;     (setq package-json--deps all)
 ;;     nil))
 
+(defun package-json--fetch-and-update (pkg current-buffer)
+  (url-retrieve (concat "https://registry.npmjs.org/" (plist-get pkg :pkg))
+                (lambda (&rest _)
+                  (goto-char (1+ url-http-end-of-headers))
+                  ;; (let* ((obj (json-read))
+                  (let* ((obj (json-parse-buffer))
+                         (data (package-json--make-data obj (plist-get pkg :version))))
+                    (plist-put pkg :data data)
+                    (with-current-buffer current-buffer
+                      (package-json--update-ov pkg data))
+                    (redisplay)
+                    (kill-buffer)))
+                nil t))
+
 (defun package-json nil
   (let* ((current-buffer (current-buffer))
          (deps (package-json--get-deps "dependencies"))
@@ -152,25 +166,7 @@
     (package-json--reset-ov all)
     (redisplay)
     (dolist (pkg all)
-      ;; (package-json--update-ov pkg nil t)
-      ;; (redisplay)
-      ;; (message "START %s" pkg)
-      (url-retrieve (concat "https://registry.npmjs.org/" (plist-get pkg :pkg))
-                    (lambda (&rest _)
-                      (goto-char (1+ url-http-end-of-headers))
-                      ;; (let* ((obj (json-read))
-                      (let* ((obj (json-parse-buffer))
-                             (data (list :name (gethash "name" obj)
-                                         :tags (gethash "dist-tags" obj)
-                                         :description (gethash "description" obj)
-                                         :homepage (gethash "homepage" obj)
-                                         :readme (gethash "readme" obj))))
-                        (plist-put pkg :data data)
-                        (with-current-buffer current-buffer
-                          (package-json--update-ov pkg data))
-                        (redisplay)
-                        (kill-buffer)))
-                    nil t))
+      (package-json--fetch-and-update pkg current-buffer))
     (setq package-json--deps all)
     nil))
 
@@ -183,6 +179,7 @@
     (dolist (pkg all)
       (let ((new pkg))
         (-some--> (--first (equal (plist-get it :pkg) (plist-get pkg :pkg)) package-json--deps)
+                  (and (equal (plist-get it :version) (plist-get pkg :version)) it)
                   (plist-put new :data (plist-get it :data)))
         (push new new-list)))
     (setq package-json--deps new-list)
@@ -320,8 +317,16 @@
     (set-frame-size frame width height t)
     (set-frame-position frame (- (frame-pixel-width) width 20 (* (frame-char-width) 2)) 10)))
 
+(defun package-json--update-data nil
+  (dolist (pkg package-json--deps)
+    (unless (plist-member pkg :data)
+      (package-json--update-ov pkg nil t)
+      (package-json--fetch-and-update pkg (current-buffer)))))
+
 (defun package-json--after-changes (_start _end _len)
-  (package-json--update))
+  (ignore-errors
+    (package-json--update)
+    (package-json--update-data)))
 
 (define-minor-mode package-json-mode
   "Minor mode for package-json."
