@@ -105,10 +105,14 @@
           (overlay-put ov 'display (concat " " (icons-in-terminal 'md_arrow_forward)))
         (overlay-put ov 'display (concat " " icon))))))
 
-(defun package-json--make-data (object)
+(defun package-json--make-data (object current-version)
   (when object
     (list :name (-some-> (gethash "name" object) (decode-coding-string 'utf-8 t))
           :tags (gethash "dist-tags" object)
+          :new-available (-some--> (gethash "dist-tags" object)
+                                   (gethash "latest" it)
+                                   (and (ignore-errors (version< (string-trim-left current-version "\\^") it))
+                                        it))
           :description (-some-> (gethash "description" object) (decode-coding-string 'utf-8 t))
           :homepage (-some-> (gethash "homepage" object) (decode-coding-string 'utf-8 t))
           :readme (-some-> (gethash "readme" object) (decode-coding-string 'utf-8 t)))
@@ -129,7 +133,7 @@
         (with-current-buffer buffer
           (goto-char (1+ url-http-end-of-headers))
           (let* ((obj (json-parse-buffer))
-                 (data (package-json--make-data obj)))
+                 (data (package-json--make-data obj (plist-get pkg :version))))
             (plist-put pkg :data data)
             (with-current-buffer current-buffer
               (package-json--update-ov pkg data))
@@ -226,9 +230,12 @@
     (erase-buffer)
     (setq mode-line-format nil
           header-line-format nil)
-    (insert (string-join (-filter 'identity (list (plist-get data :description)
-                                                  (-> (plist-get data :homepage)
-                                                      (package-json--make-clickable))))
+    (insert (string-join (-filter 'identity
+                                  (list (plist-get data :description)
+                                        (-some->> (plist-get data :new-available)
+                                                  (concat "Latest version: "))
+                                        (-> (plist-get data :homepage)
+                                            (package-json--make-clickable))))
                          "\n\n"))
     (current-buffer)))
 
