@@ -85,6 +85,7 @@
              (ov (make-overlay start (+ start distance))))
         ;; (overlay-put ov 'display (concat " " (icons-in-terminal 'md_loop :foreground "#607D8B")))
         (overlay-put ov 'display (concat " " (icons-in-terminal 'md_refresh :foreground "#607D8B")))
+        (overlay-put ov 'evaporate t)
         (overlay-put ov 'after-string
                      (propertize " " 'display `(space :align-to (+ left-margin ,distance 1))))
         (overlay-put ov 'package-json t)))))
