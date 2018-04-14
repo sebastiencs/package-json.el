@@ -351,6 +351,7 @@
 (define-minor-mode package-json-mode
   "Minor mode for package-json."
   :init-value nil
+  :lighter " package-json"
   :group package-json
   (cond
    (package-json-mode
