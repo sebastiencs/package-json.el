@@ -196,6 +196,16 @@
   (let ((var (intern (format "package-json-%s" variable))))
     `(frame-local-set ',var ,value (frame-parent))))
 
+(defun package-json--clean nil
+  (-some-> (package-json--get frame) (make-frame-invisible))
+  (dolist (pkg package-json--deps)
+
+    (save-excursion
+      (goto-char 1)
+      (forward-line (1- (plist-get pkg :line)))
+      (let* ((ov (--first (overlay-get it 'package-json) (overlays-in (line-beginning-position) (line-end-position)))))
+        (overlay-put ov 'display (concat " "))))))
+
 (defun package-json-open-readme-at-point nil
   "Open the readme of the package on the current line."
   (interactive)
