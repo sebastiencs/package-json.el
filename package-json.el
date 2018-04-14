@@ -151,7 +151,8 @@
                   ;; (let* ((obj (json-read))
                   (let* ((obj (json-parse-buffer))
                          (data (package-json--make-data obj (plist-get pkg :version))))
-                    (plist-put pkg :data data)
+                    (when (plist-get data :name)
+                      (plist-put pkg :data data))
                     (with-current-buffer current-buffer
                       (package-json--update-ov pkg data))
                     (redisplay)
