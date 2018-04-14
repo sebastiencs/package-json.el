@@ -171,8 +171,7 @@
     nil))
 
 (defun package-json--update nil
-  (let* ((current-buffer (current-buffer))
-         (deps (package-json--get-deps "dependencies"))
+  (let* ((deps (package-json--get-deps "dependencies"))
          (devdeps (package-json--get-deps "devDependencies"))
          (all (-concat deps devdeps))
          new-list)
@@ -218,6 +217,16 @@
         (pop-to-buffer))
     (-some-> (package-json--get frame)
              (make-frame-invisible))))
+
+(require 'browse-url)
+
+(defun package-json-browse-package-homepage-at-point nil
+  "Open the package homepage in the browser."
+  (interactive)
+  (-when-let* ((line (line-number-at-pos))
+               (pkg (--first (equal (plist-get it :line) line) package-json--deps))
+               (data (plist-get pkg :data)))
+    (browse-url (plist-get data :homepage))))
 
 (defvar package-json-frame-parameters
   '((left . -1)
@@ -343,5 +352,5 @@
     (remove-hook 'after-change-functions 'package-json--after-changes t)
     (remove-overlays nil nil 'package-json t))))
 
-  (provide 'package-json)
+(provide 'package-json)
 ;;; package-json.el ends here
